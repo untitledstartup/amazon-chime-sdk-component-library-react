@@ -77,7 +77,7 @@ const VoiceFocusProvider: React.FC<Props> = ({
   console.info('outside');
   logDevice(voiceFocusDevice);
   let now = Date.now();
-  const addVoiceFocus = useCallback(async (device: Device): Promise<Device | VoiceFocusTransformDevice> => {
+  const addVoiceFocus = async (device: Device): Promise<Device | VoiceFocusTransformDevice> => {
     console.info('inside', now);
     logDevice(voiceFocusDevice);
     if (voiceFocusDevice) {
@@ -106,7 +106,9 @@ const VoiceFocusProvider: React.FC<Props> = ({
 
     return device;
 
-  }, [isVoiceFocusSupported, voiceFocusDevice, voiceFocusTransformer]);
+  };
+
+  (addVoiceFocus as unknown as any).when = Date.now();
 
   let currentPromise: Promise<VoiceFocusDeviceTransformer | undefined> | undefined;
 

@@ -54,6 +54,7 @@ const AudioInputVFControl: React.FC<Props> = ({
   };
   const { devices, selectedDevice } = useAudioInputs(audioInputConfig);
 
+  console.info('Rerendering: ', Date.now(), addVoiceFocus);
   const dropdownOptions: ReactNode[] = devices.map((device) => (
     <PopOverItem
       key={device.deviceId}
