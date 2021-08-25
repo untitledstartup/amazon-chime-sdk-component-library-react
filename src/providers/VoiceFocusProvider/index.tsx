@@ -7,6 +7,7 @@ import React, {
   useMemo,
   useContext,
   createContext,
+  useCallback,
 } from 'react';
 
 import {
@@ -65,35 +66,47 @@ const VoiceFocusProvider: React.FC<Props> = ({
     return false;
   });
 
-  const addVoiceFocus = async (device: Device): Promise<Device | VoiceFocusTransformDevice> => {
-    if (!voiceFocusDevice) {
-      return createVoiceFocusDevice(device);
+  function logDevice(device: VoiceFocusTransformDevice | null) {
+    if (!device) {
+      console.info('Device is null.');
     }
-    console.info('Choosing new inner device');
-    const vf = await voiceFocusDevice.chooseNewInnerDevice(device);
-    setVoiceFocusDevice(vf);
-    return vf;
-  };
+    /* @ts-ignore */
+    console.info('Device: ', device?.voiceFocus?.nodeOptions?.modelURL);
+  }
 
-  async function createVoiceFocusDevice(inner: Device): Promise<Device | VoiceFocusTransformDevice> {
+  console.info('outside');
+  logDevice(voiceFocusDevice);
+  let now = Date.now();
+  const addVoiceFocus = useCallback(async (device: Device): Promise<Device | VoiceFocusTransformDevice> => {
+    console.info('inside', now);
+    logDevice(voiceFocusDevice);
+    if (voiceFocusDevice) {
+      console.info('Choosing new inner device');
+      const vf = await voiceFocusDevice.chooseNewInnerDevice(device);
+      setVoiceFocusDevice(vf);
+      return vf;
+    }
+
     if (!isVoiceFocusSupported) {
       console.info('Not supported, not creating device.');
-      return inner;
+      return device;
     }
 
     try {
       const transformer = await getVoiceFocusDeviceTransformer();
       console.info('Got transformer for device', transformer);
-      const device = await transformer?.createTransformDevice(inner);
-      if (device) {
-        setVoiceFocusDevice(device);
-        return device;
+      const vf = await transformer?.createTransformDevice(device);
+      if (vf) {
+        setVoiceFocusDevice(vf);
+        return vf;
       }
     } catch (e) {
       console.warn('Amazon Voice Focus is not supported.', e);
     }
-    return inner;
-  }
+
+    return device;
+
+  }, [isVoiceFocusSupported, voiceFocusDevice, voiceFocusTransformer]);
 
   let currentPromise: Promise<VoiceFocusDeviceTransformer | undefined> | undefined;
 
@@ -122,18 +135,29 @@ const VoiceFocusProvider: React.FC<Props> = ({
       // A different request arrived afterwards. Drop this one on the floor
       // using the cancelation mechanism of `useEffect`.
       if (canceled()) {
-        console.info('xxx discarding due to race');
+        console.info('xxx discarding due to race', new Error('yyy'));
         return;
       }
 
       console.info('Got transformer', transformer);
       console.info('Clearing promise');
       currentPromise = undefined;
-      setVoiceFocusTransformer(transformer);
+      try {
+        setVoiceFocusTransformer(transformer);
+      } catch (e) {
+        console.info('Set failed 1!');
+      }
+      try {
+        console.info('Clearing VF device.');
+        setVoiceFocusDevice(null);
+        console.info('done clear');
+      } catch (e) {
+        console.info('Set failed 2!');
+      }
       setIsVoiceFocusSupported(transformer && transformer.isSupported());
     }).catch(e => {
       if (canceled()) {
-        console.info('xxx discarding due to race');
+        console.info('xxx discarding due to race', new Error('xxx'));
         return;
       }
 
@@ -141,10 +165,13 @@ const VoiceFocusProvider: React.FC<Props> = ({
       console.info('Clearing promise');
       currentPromise = undefined;
       setVoiceFocusTransformer(null);
+      console.info('zzz');
+      setVoiceFocusDevice(null);
       setIsVoiceFocusSupported(false);
     });
 
     console.info('Overwriting promise', currentPromise, 'with', fetch);
+    currentPromise = fetch;
 
     return fetch;
   }
@@ -154,6 +181,7 @@ const VoiceFocusProvider: React.FC<Props> = ({
 
     // Throw away the old one and reinitialize.
     setVoiceFocusTransformer(null);
+    setVoiceFocusDevice(null);
     createVoiceFocusDeviceTransformer(vfSpec, options, canceled);
   };
 
@@ -182,13 +210,11 @@ const VoiceFocusProvider: React.FC<Props> = ({
     }
   }, [isVoiceFocusSupported]);
 
-  const value: VoiceFocusState = useMemo(
-    () => ({
-      isVoiceFocusSupported,
-      addVoiceFocus,
-    }),
-    [isVoiceFocusSupported, addVoiceFocus]
-  );
+  // TODO: restore useMemo?
+  const value: VoiceFocusState = {
+    isVoiceFocusSupported,
+    addVoiceFocus,
+  };
 
   return (
     <VoiceFocusContext.Provider value={value}>
