@@ -4,12 +4,11 @@
 import React, {
   useState,
   useEffect,
-  useRef,
   useMemo,
   useContext,
   createContext,
-  useCallback,
 } from 'react';
+
 import {
   Device,
   VoiceFocusTransformDevice,
@@ -46,14 +45,23 @@ const VoiceFocusProvider: React.FC<Props> = ({
   const [voiceFocusDevice, setVoiceFocusDevice] = useState<VoiceFocusTransformDevice | null>(null);
   const [voiceFocusTransformer, setVoiceFocusTransformer] = useState<VoiceFocusDeviceTransformer | null>(null);
 
-  // Check whether the value of spec is undefined or empty object
+  // Make sure that minor changes to the spec don't result in recomputation:
+  // Any value of `{}` and undefined are all considered the same.
   const vfSpec = useMemoCompare(spec, (prev: VoiceFocusSpec | undefined, next: VoiceFocusSpec | undefined): boolean => {
     if (prev === next) {
       return true;
     }
-    if (prev && next && Object.keys(prev).length === 0 && Object.keys(next).length === 0) {
+
+    // Either prev is undefined and next is the empty object, or
+    // next is undefined and prev is the empty object.
+    if (prev === undefined && next && Object.keys(next).length === 0) {
       return true;
     }
+    if (next === undefined && prev && Object.keys(prev).length === 0) {
+      return true;
+    }
+
+    // They are a richer objects, and we won't try to compare them.
     return false;
   });
 
@@ -61,6 +69,7 @@ const VoiceFocusProvider: React.FC<Props> = ({
     if (!voiceFocusDevice) {
       return createVoiceFocusDevice(device);
     }
+    console.info('Choosing new inner device');
     const vf = await voiceFocusDevice.chooseNewInnerDevice(device);
     setVoiceFocusDevice(vf);
     return vf;
@@ -68,10 +77,13 @@ const VoiceFocusProvider: React.FC<Props> = ({
 
   async function createVoiceFocusDevice(inner: Device): Promise<Device | VoiceFocusTransformDevice> {
     if (!isVoiceFocusSupported) {
+      console.info('Not supported, not creating device.');
       return inner;
     }
+
     try {
-      const transformer = await getVoiceFocusDeviceTransformer(spec, options);
+      const transformer = await getVoiceFocusDeviceTransformer();
+      console.info('Got transformer for device', transformer);
       const device = await transformer?.createTransformDevice(inner);
       if (device) {
         setVoiceFocusDevice(device);
@@ -83,7 +95,7 @@ const VoiceFocusProvider: React.FC<Props> = ({
     return inner;
   }
 
-  let currentPromise: Promise<VoiceFocusDeviceTransformer>;
+  let currentPromise: Promise<VoiceFocusDeviceTransformer | undefined> | undefined;
 
   /**
   * We use currentPromise to store the latest promise of VoiceFocusDeviceTransformer.
@@ -91,45 +103,71 @@ const VoiceFocusProvider: React.FC<Props> = ({
   * We will just grab the latest settings to create an Amazon Voice Focus transformer.
   * This function will always return the most recent promise.
   */
-  async function getVoiceFocusDeviceTransformer(spec: VoiceFocusSpec | undefined,
-    options: VoiceFocusDeviceOptions | undefined): Promise<VoiceFocusDeviceTransformer> {
+  async function getVoiceFocusDeviceTransformer(): Promise<VoiceFocusDeviceTransformer | undefined> {
     if (voiceFocusTransformer) {
+      console.info('Have a transformer.');
       return voiceFocusTransformer;
     }
 
-    const fetch = VoiceFocusDeviceTransformer.create(spec, options);
-    fetch.then((value) => {
-      if (fetch === currentPromise) {
-        setVoiceFocusTransformer(value);
-      }
-    });
-    currentPromise = fetch;
+    // This should only be hit if `isVoiceFocusSupported` was true at some point,
+    // but the transformer is now missing, which means we are updating the transformer.
+    console.info('No transformer; waiting for the last creation promise to resolve.');
     return currentPromise;
   }
 
-  // Just for testing, will remove it later
-  (window as unknown as any).changeSpec = async (obj: any) => {
-    const fetch = getVoiceFocusDeviceTransformer(obj, options);
-    const transformer = await fetch;
-    console.log('____________________');
-    console.log('the current promise', fetch);
-    console.log('the current transformer', transformer);
+  async function createVoiceFocusDeviceTransformer(spec: VoiceFocusSpec | undefined, options: VoiceFocusDeviceOptions | undefined, canceled: () => boolean): Promise<VoiceFocusDeviceTransformer> {
+    const fetch = VoiceFocusDeviceTransformer.create(spec, options);
+    console.info('Creation promise is', fetch);
+    fetch.then((transformer) => {
+      // A different request arrived afterwards. Drop this one on the floor
+      // using the cancelation mechanism of `useEffect`.
+      if (canceled()) {
+        console.info('xxx discarding due to race');
+        return;
+      }
+
+      console.info('Got transformer', transformer);
+      console.info('Clearing promise');
+      currentPromise = undefined;
+      setVoiceFocusTransformer(transformer);
+      setIsVoiceFocusSupported(transformer && transformer.isSupported());
+    }).catch(e => {
+      if (canceled()) {
+        console.info('xxx discarding due to race');
+        return;
+      }
+
+      console.warn('Amazon Voice Focus is not supported.', e);
+      console.info('Clearing promise');
+      currentPromise = undefined;
+      setVoiceFocusTransformer(null);
+      setIsVoiceFocusSupported(false);
+    });
+
+    console.info('Overwriting promise', currentPromise, 'with', fetch);
+
+    return fetch;
   }
 
+  async function initVoiceFocus(vfSpec: VoiceFocusSpec | undefined, options: VoiceFocusDeviceOptions | undefined, canceled: () => boolean) {
+    console.info('Reiniting with', vfSpec, options);
+
+    // Throw away the old one and reinitialize.
+    setVoiceFocusTransformer(null);
+    createVoiceFocusDeviceTransformer(vfSpec, options, canceled);
+  };
+
+  // Just for testing, will remove it later
+  (window as unknown as any).initVoiceFocus = initVoiceFocus;
+  (window as unknown as any).getVoiceFocusDeviceTransformer = getVoiceFocusDeviceTransformer;
+
   useEffect(() => {
-    async function initVoiceFocus() {
-      try {
-        const transformer = await getVoiceFocusDeviceTransformer(vfSpec, options);
-        if (transformer && transformer.isSupported()) {
-          setIsVoiceFocusSupported(true);
-          return;
-        }
-      } catch (e) {
-        console.warn('Amazon Voice Focus is not supported.', e);
-      }
-      setIsVoiceFocusSupported(false);
+    console.info('Props did change', vfSpec, options);
+    let canceled = false;
+    initVoiceFocus(vfSpec, options, () => canceled);
+    return () => {
+      canceled = true;
     };
-    initVoiceFocus();
   }, [vfSpec, options]);
 
   useEffect(() => {
@@ -170,7 +208,4 @@ const useVoiceFocus = (): VoiceFocusState => {
   return context;
 }
 
-
 export { VoiceFocusProvider, useVoiceFocus };
-
-
