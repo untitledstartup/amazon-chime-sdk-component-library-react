@@ -111,7 +111,7 @@ const AudioInputVFControl: React.FC<Props> = ({
       dropdownOptions?.push(vfOption);
     }
     setDropdownWithVFOptions(dropdownOptions);
-  }, [isVoiceFocusSupported, isVoiceFocusEnabled, isLoading, device, selectedDevice]);
+  }, [isVoiceFocusSupported, addVoiceFocus, isVoiceFocusEnabled, isLoading, device, selectedDevice]);
 
   useEffect(() => {
     async function onVFCheckboxChange() {
