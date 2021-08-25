@@ -42,7 +42,7 @@ import {
 const App = () => (
   <VoiceFocusProvider>
     <MeetingProvider>
-        <MyChild />
+      <MyChild />
     </MeetingProvider>
   </VoiceFocusProvider>
 );
@@ -62,7 +62,7 @@ const MyChild = () => {
   }, []);
 
   useEffect(() => {
-    // Only when the current input audio device is an Amazon Voice Focus transform device, 
+    // Only when the current input audio device is an Amazon Voice Focus transform device,
     // Amazon Voice Focus button will be checked.
     if (device instanceof VoiceFocusTransformDevice) {
       setIsVoiceFocusEnabled(true);
@@ -71,7 +71,7 @@ const MyChild = () => {
     }
   }, [device]);
 
-  useEffect(() => { 
+  useEffect(() => {
     let current = device;
     if (isVoiceFocusOn) {
       const currentDevice = audioInputSelectionToDevice(device);
@@ -83,7 +83,7 @@ const MyChild = () => {
     }
     meetingManager.selectAudioInputDevice(current);
   }, [isVoiceFocusOn];
-  
+
   const onClick = () => {
     setIsVoiceFocusOn(current => !current);
   }
