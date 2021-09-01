@@ -116,6 +116,7 @@ export { useElementAspectRatio } from './hooks/useElementAspectRatio';
 
 export { useMeetingManager } from './providers/MeetingProvider';
 export { VoiceFocusProvider } from './providers/VoiceFocusProvider';
+export { VideoProcessingProvider } from './providers/VideoProcessingProvider';
 export { useAudioVideo } from './providers/AudioVideoProvider';
 export { useRosterState } from './providers/RosterProvider';
 export { useRemoteVideoTileState } from './providers/RemoteVideoTileProvider';

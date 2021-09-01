@@ -51,3 +51,24 @@ export const isOptionActive = (
 export const supportsSetSinkId = (): boolean => {
   return 'setSinkId' in HTMLAudioElement.prototype;
 }
+
+export const getDeviceID = (innerDevice: MediaTrackConstraints | MediaTrackConstraintSet): string => {
+  if (Array.isArray(innerDevice)) {
+    innerDevice = innerDevice[0];
+  }
+
+  const deviceId = innerDevice.deviceId;
+  if (typeof (deviceId) === 'string') {
+    return deviceId;
+  }
+  if (Array.isArray(deviceId)) {
+    return deviceId[0];
+  }
+  if (Array.isArray(deviceId?.exact) && deviceId?.exact) {
+    return deviceId.exact[0];
+  }
+  if (typeof (deviceId?.exact) === 'string') {
+    return deviceId.exact;
+  }
+  return '';
+}
