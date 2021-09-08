@@ -48,9 +48,12 @@ const VideoInputControl: React.FC<Props> = ({ label = 'Video', videoFilterOffLab
   }, []);
 
   useEffect(() => {
+    console.log(`Device changed - ${JSON.stringify(device)} is a video transform device: ${isVideoTransformDevice(device)}`);
     if (isVideoTransformDevice(device)) {
+      console.log(`Setting Video Filter Enabled to true`);
       setIsVideoFilterEnabled(true);
     } else {
+      console.log(`Setting Video Filter Enabled to false`);
       setIsVideoFilterEnabled(false);
     }
   }, [device]);
@@ -58,17 +61,28 @@ const VideoInputControl: React.FC<Props> = ({ label = 'Video', videoFilterOffLab
   
   useEffect(() => {
     let dropDownOptions = [];
-
+    console.log(`Something changed - rerender the video input list`);
     const deviceOptions: ReactNode[] = devices.map((device) => (
       <PopOverItem
         key={device.deviceId}
         children= {<span>{device.label}</span>}
         checked= {isOptionActive(selectedDevice, device.deviceId)}
-        onClick= {() => selectDevice(device.deviceId)}
+        onClick= {async() => {
+          // Depending on if a video filter is applied, use the video processor on the next video input selected
+          if (device.deviceId === 'none') {
+            selectDevice('none');
+          } else if (isVideoFilterEnabled) {
+              const currentDevice = videoInputSelectionToDevice(device.deviceId);
+              const current = await addVideoProcessor(currentDevice);
+              await meetingManager.selectVideoInputDevice(current);
+          } else {
+            selectDevice(device.deviceId);
+          }
+        }}
       />
     ));
   
-    // Need to add multiple filters
+    // TODO: Need to add multiple filters eventually
     const videoFilterOptions: ReactNode = 
     <PopOverItem
       key='videoinput'
@@ -102,19 +116,28 @@ const VideoInputControl: React.FC<Props> = ({ label = 'Video', videoFilterOffLab
 
   useEffect(() => {
     async function onVideoFilterCheckboxChange() {
+      console.log(`VideoFilter Checkbox On changed to: ${isVideoFilterOn}`);
       let current = device;
-      // TODO: Remove
-      console.log("Checkbox picked");
       if (isVideoFilterOn) {
         // create a video transform device and select it
-        if (typeof (device) === 'string') {
-          const currentDevice = videoInputSelectionToDevice(device);
-          current = await addVideoProcessor(currentDevice);
+        if (!isVideoTransformDevice(device)) {
+          if (typeof device === 'string'){
+            const currentDevice = videoInputSelectionToDevice(device);
+            current = await addVideoProcessor(currentDevice);
+          } else {
+            current = await addVideoProcessor(device);
+          }
+          console.log("Video filter is on - selecting video transform device: " + JSON.stringify(current));
+        } else {
+          console.log("Video Filter is already on");
         }
       } else {
         // switch back to the inner device
         if (isVideoTransformDevice(device)) {
           current = await device.intrinsicDevice();
+          console.log("Video filter is off - selecting device: " + JSON.stringify(current));
+        } else {
+          console.log("Video Filter is already off");
         }
       }
       console.log(`Selecting ${JSON.stringify(current)}`);

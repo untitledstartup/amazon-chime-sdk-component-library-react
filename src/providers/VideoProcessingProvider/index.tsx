@@ -16,9 +16,10 @@ import React, {
     ConsoleLogger,
     LogLevel,
   } from 'amazon-chime-sdk-js';
-  import { useMeetingManager } from '../MeetingProvider';
 
-  import CircularCut from '../../videofilter/CircularCut'
+  import CircularCut from '../../videofilter/CircularCut';
+  import CWTSegmentationProcessor from '../../videofilter/CWTSegmentationProcessor';
+
   
   interface Props {
     // options?: ;
@@ -26,7 +27,6 @@ import React, {
   
   interface VideoProcessingState {
     addVideoProcessor: (device: Device) => Promise<Device | VideoTransformDevice>;
-    // isVideoTransformDevice: (device: Device) => boolean | undefined;
   }
   
   const VideoProcessingContext = createContext<VideoProcessingState | null>(null);
@@ -36,8 +36,7 @@ import React, {
     children
   }) => {
     const [videoTransformDevice, setVideoTransformDevice] = useState<VideoTransformDevice | null>(null);
-    const meetingManager = useMeetingManager();
-  
+
     const addVideoProcessor = async (device: Device): Promise<Device | VideoTransformDevice> => {
       console.log("Adding VideoProcessingDevice" + device?.toString());
       if (isVideoTransformDevice(device)){
@@ -45,10 +44,11 @@ import React, {
           return device;
       }
       try {
-        const processor = new CircularCut();
-        // TODO: Change this
+        // TODO: Need to add logic to add these one at a time - for demo's sake, this is how to apply multiple processors
+        const processor = new CWTSegmentationProcessor();
+        const processor2 = new CircularCut();
         const logger = new ConsoleLogger('string', LogLevel.INFO);
-        const chosenVideoTransformDevice = new DefaultVideoTransformDevice(logger, device, [processor]);
+        const chosenVideoTransformDevice = new DefaultVideoTransformDevice(logger, device, [processor, processor2]);
         setVideoTransformDevice(chosenVideoTransformDevice);
         return chosenVideoTransformDevice;
       } catch (e) {
